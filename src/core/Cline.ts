@@ -85,6 +85,8 @@ import { validateToolUse, isToolAllowedForMode, ToolName } from "./mode-validato
 import { parseXml } from "../utils/xml"
 import { getWorkspacePath } from "../utils/path"
 
+import {Message, logMessages, logOutput} from "./prompts/show_prompt"
+
 export type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
 type UserContent = Array<Anthropic.Messages.ContentBlockParam>
 
@@ -1225,6 +1227,21 @@ export class Cline extends EventEmitter<ClineEvents> {
 			}
 			return { role, content }
 		})
+
+		const ollamaMessages: Message[] = [
+			{ role: "system", content: systemPrompt },
+			...cleanConversationHistory.map(msg => ({
+				role: msg.role,
+				content:
+					typeof msg.content === "string"
+						? msg.content
+						: msg.content
+								.map((c) => ("text" in c ? c.text : ""))
+								.filter(Boolean)
+								.join("\n"),
+			})),
+		]
+		logMessages(ollamaMessages, this.providerRef.deref()?.context.globalStorageUri.fsPath)
 
 		const stream = this.api.createMessage(systemPrompt, cleanConversationHistory)
 		const iterator = stream[Symbol.asyncIterator]()
@@ -3441,6 +3458,7 @@ export class Cline extends EventEmitter<ClineEvents> {
 						break
 					}
 				}
+				logOutput(assistantMessage)
 			} catch (error) {
 				// abandoned happens when extension is no longer waiting for the cline instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
 				if (!this.abandoned) {
